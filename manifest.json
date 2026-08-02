@@ -1,7 +1,7 @@
 {
   "id": "molren",
   "name": "Molren",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.4.0",
   "description": "Render 2D chemical structures from SMILES in your notes, powered by RDKit.js.",
   "author": "Amberlogica",
