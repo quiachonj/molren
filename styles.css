@@ -14,6 +14,15 @@
   margin: 0.25rem 0;
 }
 
+/* Reactions (or blocks containing one): full-width stacked rows. */
+.molren-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
 .molren-cell {
   display: flex;
   flex-direction: column;

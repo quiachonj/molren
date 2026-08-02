@@ -26,6 +26,7 @@ export default class MolrenPlugin extends Plugin {
       smiles: "smiles",
       mol: "molblock",
       sdf: "sdf",
+      rxn: "reaction",
       chem: "auto",
     };
     for (const [lang, format] of Object.entries(fences)) {

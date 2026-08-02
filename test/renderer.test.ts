@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import type { RDKitModule, JSMol } from "@rdkit/rdkit";
-import { molToSvg, cacheKey, parseInput, detectFormat } from "../src/renderer";
+import {
+  molToSvg,
+  rxnToSvg,
+  isReaction,
+  cacheKey,
+  parseInput,
+  detectFormat,
+} from "../src/renderer";
 import type { MolrenSettings } from "../src/settings";
 
 const OPTS = { width: 350, height: 300, addStereoAnnotation: true };
@@ -105,6 +112,58 @@ describe("molToSvg", () => {
   });
 });
 
+describe("isReaction", () => {
+  it("is true when the input contains a reaction arrow", () => {
+    expect(isReaction("CCO>>CC=O")).toBe(true);
+    expect(isReaction("A>B>C")).toBe(true);
+  });
+  it("is false for ordinary SMILES", () => {
+    expect(isReaction("CC(=O)Oc1ccccc1C(=O)O")).toBe(false);
+  });
+});
+
+describe("rxnToSvg", () => {
+  function fakeRxnKit(overrides: { rxn?: unknown; svg?: string } = {}) {
+    const del = vi.fn();
+    const get_svg_with_highlights = vi.fn(
+      (_d: string) => overrides.svg ?? "<svg data-rxn></svg>",
+    );
+    const rxn =
+      overrides.rxn === undefined
+        ? { get_svg_with_highlights, delete: del }
+        : overrides.rxn;
+    const get_rxn = vi.fn(() => rxn);
+    const rdkit = { get_rxn } as unknown as RDKitModule;
+    return { rdkit, del, get_rxn };
+  }
+
+  it("renders SVG for a valid reaction", () => {
+    const { rdkit } = fakeRxnKit();
+    expect(rxnToSvg(rdkit, "CCO>>CC=O", OPTS)).toEqual({
+      ok: true,
+      svg: "<svg data-rxn></svg>",
+    });
+  });
+
+  it("reports an invalid reaction when get_rxn returns null", () => {
+    const { rdkit } = fakeRxnKit({ rxn: null });
+    expect(rxnToSvg(rdkit, "bad>>", OPTS).ok).toBe(false);
+  });
+
+  it("frees the reaction handle", () => {
+    const { rdkit, del } = fakeRxnKit();
+    rxnToSvg(rdkit, "CCO>>CC=O", OPTS);
+    expect(del).toHaveBeenCalledOnce();
+  });
+
+  it("strips the xml prolog", () => {
+    const { rdkit } = fakeRxnKit({
+      svg: "<?xml version='1.0'?>\n<svg>r</svg>",
+    });
+    expect(rxnToSvg(rdkit, "CCO>>CC=O", OPTS)).toEqual({ ok: true, svg: "<svg>r</svg>" });
+  });
+});
+
 describe("detectFormat", () => {
   it("detects SMILES", () => {
     expect(detectFormat("CCO")).toBe("smiles");
@@ -178,6 +237,15 @@ describe("parseInput — SDF", () => {
     expect(parseInput(sdf, "sdf")).toEqual([
       { input: "Ethanol\n mb1\nM  END", caption: "Ethanol" },
       { input: "Benzene\n mb2\nM  END", caption: "Benzene" },
+    ]);
+  });
+});
+
+describe("parseInput — reaction", () => {
+  it("parses one reaction per line, like SMILES", () => {
+    expect(parseInput("CCO>>CC=O one\nC>>N", "reaction")).toEqual([
+      { input: "CCO>>CC=O", caption: "one" },
+      { input: "C>>N" },
     ]);
   });
 });

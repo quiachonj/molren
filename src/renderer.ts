@@ -21,10 +21,33 @@ export interface MoleculeSpec {
 }
 
 /** How a code block's contents should be parsed. */
-export type InputFormat = "smiles" | "molblock" | "sdf" | "auto";
+export type InputFormat =
+  | "smiles"
+  | "molblock"
+  | "sdf"
+  | "reaction"
+  | "auto";
 
 /** Bond stroke width passed to RDKit. Kept internal (not user-facing yet). */
 const BOND_LINE_WIDTH = 1.2;
+
+/** Reactions span reactants → products, so they get a wider canvas. */
+const REACTION_WIDTH_FACTOR = 2;
+
+// The shipped @rdkit/rdkit types omit the reaction API, so declare what we use.
+interface JSReaction {
+  get_svg_with_highlights(details: string): string;
+  delete(): void;
+}
+interface RDKitWithRxn extends RDKitModule {
+  get_rxn(input: string, details?: string): JSReaction | null;
+}
+
+/** True when the input is a reaction SMILES. `>` is not a valid SMILES atom/
+ * bond character, so its presence unambiguously marks a reaction. */
+export function isReaction(input: string): boolean {
+  return input.includes(">");
+}
 
 /**
  * Sniffs the format of a block's contents for the auto-detecting `chem` fence.
@@ -47,6 +70,7 @@ export function parseInput(source: string, format: InputFormat): MoleculeSpec[] 
       return parseSdf(source);
     case "molblock":
       return parseMolblock(source);
+    case "reaction":
     case "smiles":
     default:
       return parseSmilesLines(source);
@@ -141,6 +165,35 @@ export function molToSvg(
   }
 }
 
+/**
+ * Pure reaction SMILES → SVG conversion (reactants>>products, optionally with
+ * agents). Owns the JSReaction lifetime. Mirrors molToSvg's contract.
+ */
+export function rxnToSvg(
+  RDKit: RDKitModule,
+  input: string,
+  opts: RenderOptions,
+): RenderResult {
+  const text = input.trim();
+  if (!text) {
+    return { ok: false, error: "empty reaction" };
+  }
+
+  let rxn: JSReaction | null = null;
+  try {
+    rxn = (RDKit as RDKitWithRxn).get_rxn(text);
+    if (!rxn) {
+      return { ok: false, error: `invalid reaction: ${preview(text)}` };
+    }
+    const svg = stripXmlProlog(rxn.get_svg_with_highlights(drawDetails(opts)));
+    return { ok: true, svg };
+  } catch (err) {
+    return { ok: false, error: messageOf(err) };
+  } finally {
+    rxn?.delete();
+  }
+}
+
 /** Serializes RDKit MolDrawOptions. Unknown keys are ignored by RDKit. */
 function drawDetails(opts: RenderOptions): string {
   return JSON.stringify({
@@ -173,7 +226,12 @@ export class MoleculeRenderer {
   ): Promise<void> {
     el.empty();
 
-    const specs = parseInput(source, format);
+    // Resolve the format up front: reactions are only possible in the
+    // line-based (SMILES/reaction) paths, never inside a molblock/SDF.
+    const fmt = format === "auto" ? detectFormat(source) : format;
+    const lineBased = fmt === "smiles" || fmt === "reaction";
+
+    const specs = parseInput(source, fmt);
     if (specs.length === 0) {
       this.mountError(el, "empty block");
       return;
@@ -187,18 +245,26 @@ export class MoleculeRenderer {
       return;
     }
 
+    const isRxn = (spec: MoleculeSpec) => lineBased && isReaction(spec.input);
+    const hasReaction = specs.some(isRxn);
     const multiple = specs.length > 1;
-    const root = el.createDiv({
-      cls: multiple ? "molren-grid" : "molren-single",
-    });
-    if (multiple) {
+
+    // Reactions are wide, so any block containing one stacks full-width rows
+    // instead of using the molecule grid.
+    let root: HTMLElement;
+    if (hasReaction) {
+      root = el.createDiv({ cls: "molren-stack" });
+    } else if (multiple) {
+      root = el.createDiv({ cls: "molren-grid" });
       // Responsive: columns fit as many cards of the chosen width as possible.
       root.style.gridTemplateColumns = `repeat(auto-fill, minmax(${settings.width}px, 1fr))`;
+    } else {
+      root = el.createDiv({ cls: "molren-single" });
     }
 
     for (const spec of specs) {
       const cell = root.createDiv({ cls: "molren-cell" });
-      this.renderInto(cell, RDKit, spec, settings);
+      this.renderInto(cell, RDKit, spec, settings, isRxn(spec));
     }
   }
 
@@ -207,15 +273,22 @@ export class MoleculeRenderer {
     RDKit: RDKitModule,
     spec: MoleculeSpec,
     settings: MolrenSettings,
+    reaction: boolean,
   ): void {
     const key = cacheKey(spec.input, settings);
     let svg = this.cache.get(key);
     if (svg === undefined) {
-      const result = molToSvg(RDKit, spec.input, {
-        width: settings.width,
-        height: settings.height,
-        addStereoAnnotation: settings.addStereoAnnotation,
-      });
+      const result = reaction
+        ? rxnToSvg(RDKit, spec.input, {
+            width: settings.width * REACTION_WIDTH_FACTOR,
+            height: settings.height,
+            addStereoAnnotation: settings.addStereoAnnotation,
+          })
+        : molToSvg(RDKit, spec.input, {
+            width: settings.width,
+            height: settings.height,
+            addStereoAnnotation: settings.addStereoAnnotation,
+          });
       if (!result.ok) {
         this.mountError(cell, result.error);
         if (spec.caption) this.mountCaption(cell, spec.caption);
