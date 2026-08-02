@@ -1,20 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
 import type { RDKitModule, JSMol } from "@rdkit/rdkit";
-import { molToSvg, cacheKey, parseBlock } from "../src/renderer";
+import { molToSvg, cacheKey, parseInput, detectFormat } from "../src/renderer";
 import type { MolrenSettings } from "../src/settings";
 
 const OPTS = { width: 350, height: 300, addStereoAnnotation: true };
 
-/** Build a fake RDKit module whose get_mol returns a controllable JSMol. */
-function fakeRDKit(overrides: Partial<JSMol> & { valid?: boolean } = {}) {
-  const { valid = true, ...molOverrides } = overrides;
+/**
+ * Build a fake RDKit module whose get_mol returns a controllable JSMol.
+ * `hasCoords` mirrors RDKit's has_coords() (0 = none, 2 = 2D).
+ */
+function fakeRDKit(
+  overrides: Partial<JSMol> & { valid?: boolean; hasCoords?: number } = {},
+) {
+  const { valid = true, hasCoords = 0, ...molOverrides } = overrides;
   const del = vi.fn();
   const set_new_coords = vi.fn(() => true);
+  const has_coords = vi.fn(() => hasCoords);
   const get_svg_with_highlights = vi.fn(
     (_details: string) => "<svg data-mol></svg>",
   );
   const mol = {
     is_valid: () => valid,
+    has_coords,
     set_new_coords,
     get_svg_with_highlights,
     delete: del,
@@ -22,54 +29,55 @@ function fakeRDKit(overrides: Partial<JSMol> & { valid?: boolean } = {}) {
   } as unknown as JSMol;
   const get_mol = vi.fn(() => mol);
   const rdkit = { get_mol } as unknown as RDKitModule;
-  return { rdkit, mol, get_mol, del, set_new_coords, get_svg_with_highlights };
+  return { rdkit, mol, get_mol, del, set_new_coords, has_coords, get_svg_with_highlights };
 }
 
 describe("molToSvg", () => {
   it("renders SVG for a valid SMILES", () => {
     const { rdkit } = fakeRDKit();
-    const result = molToSvg(rdkit, "CCO", OPTS);
-    expect(result).toEqual({ ok: true, svg: "<svg data-mol></svg>" });
+    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({
+      ok: true,
+      svg: "<svg data-mol></svg>",
+    });
   });
 
   it("rejects empty / whitespace input without touching RDKit", () => {
     const { rdkit, get_mol } = fakeRDKit();
-    const result = molToSvg(rdkit, "   ", OPTS);
-    expect(result.ok).toBe(false);
+    expect(molToSvg(rdkit, "   ", OPTS).ok).toBe(false);
     expect(get_mol).not.toHaveBeenCalled();
   });
 
-  it("reports invalid SMILES", () => {
+  it("reports invalid input using a one-line preview", () => {
     const { rdkit } = fakeRDKit({ valid: false });
-    const result = molToSvg(rdkit, "not-a-molecule", OPTS);
-    expect(result).toEqual({
+    expect(molToSvg(rdkit, "not-a-molecule", OPTS)).toEqual({
       ok: false,
-      error: "invalid SMILES: not-a-molecule",
+      error: "invalid structure: not-a-molecule",
     });
   });
 
   it("treats a null get_mol result as invalid", () => {
     const get_mol = vi.fn(() => null);
     const rdkit = { get_mol } as unknown as RDKitModule;
-    const result = molToSvg(rdkit, "X", OPTS);
-    expect(result.ok).toBe(false);
+    expect(molToSvg(rdkit, "X", OPTS).ok).toBe(false);
   });
 
-  it("regenerates CoordGen coordinates for the SMILES", () => {
-    const { rdkit, set_new_coords } = fakeRDKit();
+  it("generates CoordGen coords when the input has none (SMILES)", () => {
+    const { rdkit, set_new_coords } = fakeRDKit({ hasCoords: 0 });
     molToSvg(rdkit, "CCO", OPTS);
     expect(set_new_coords).toHaveBeenCalledWith(true);
+  });
+
+  it("preserves authored coords when the input already has them (molblock)", () => {
+    const { rdkit, set_new_coords } = fakeRDKit({ hasCoords: 2 });
+    molToSvg(rdkit, "…molblock…", OPTS);
+    expect(set_new_coords).not.toHaveBeenCalled();
   });
 
   it("passes dimensions and stereo flag through the draw options", () => {
     const { rdkit, get_svg_with_highlights } = fakeRDKit();
     molToSvg(rdkit, "CCO", { width: 400, height: 250, addStereoAnnotation: false });
     const details = JSON.parse(get_svg_with_highlights.mock.calls[0][0]);
-    expect(details).toMatchObject({
-      width: 400,
-      height: 250,
-      addStereoAnnotation: false,
-    });
+    expect(details).toMatchObject({ width: 400, height: 250, addStereoAnnotation: false });
   });
 
   it("frees the mol handle even when valid", () => {
@@ -84,8 +92,7 @@ describe("molToSvg", () => {
         throw new Error("draw failed");
       },
     });
-    const result = molToSvg(rdkit, "CCO", OPTS);
-    expect(result).toEqual({ ok: false, error: "draw failed" });
+    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({ ok: false, error: "draw failed" });
     expect(del).toHaveBeenCalledOnce();
   });
 
@@ -94,59 +101,94 @@ describe("molToSvg", () => {
       get_svg_with_highlights: () =>
         "<?xml version='1.0' encoding='iso-8859-1'?>\n<svg>real</svg>",
     });
-    const result = molToSvg(rdkit, "CCO", OPTS);
-    expect(result).toEqual({ ok: true, svg: "<svg>real</svg>" });
-  });
-
-  it("trims input before parsing", () => {
-    const { rdkit, get_mol } = fakeRDKit();
-    molToSvg(rdkit, "  CCO\n", OPTS);
-    expect(get_mol).toHaveBeenCalledWith("CCO");
+    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({ ok: true, svg: "<svg>real</svg>" });
   });
 });
 
-describe("parseBlock", () => {
+describe("detectFormat", () => {
+  it("detects SMILES", () => {
+    expect(detectFormat("CCO")).toBe("smiles");
+    expect(detectFormat("CCO Ethanol\nc1ccccc1 Benzene")).toBe("smiles");
+  });
+
+  it("detects a molblock via 'M  END' or a version tag", () => {
+    const mb = "Aspirin\n     RDKit          2D\n\n  1  0  0  0  0  0\nM  END";
+    expect(detectFormat(mb)).toBe("molblock");
+    expect(detectFormat("x\n\n\n  0  0  0 V3000\nM  END")).toBe("molblock");
+  });
+
+  it("detects SDF via the $$$$ record separator", () => {
+    expect(detectFormat("Ethanol\n...\nM  END\n$$$$\nBenzene\n...\nM  END\n$$$$")).toBe("sdf");
+  });
+});
+
+describe("parseInput — SMILES", () => {
   it("returns one spec per non-empty line", () => {
-    expect(parseBlock("CCO\nc1ccccc1\n")).toEqual([
-      { smiles: "CCO" },
-      { smiles: "c1ccccc1" },
+    expect(parseInput("CCO\nc1ccccc1\n", "smiles")).toEqual([
+      { input: "CCO" },
+      { input: "c1ccccc1" },
     ]);
   });
 
-  it("captures a caption after the first whitespace", () => {
-    expect(parseBlock("CCO Ethanol")).toEqual([
-      { smiles: "CCO", caption: "Ethanol" },
-    ]);
-  });
-
-  it("keeps multi-word captions intact", () => {
-    expect(parseBlock("CC(=O)O   acetic acid")).toEqual([
-      { smiles: "CC(=O)O", caption: "acetic acid" },
+  it("captures a multi-word caption after the first whitespace", () => {
+    expect(parseInput("CC(=O)O   acetic acid", "smiles")).toEqual([
+      { input: "CC(=O)O", caption: "acetic acid" },
     ]);
   });
 
   it("skips blank lines and # comments", () => {
-    const src = "# heading\n\nCCO first\n\n# note\nCCC second\n";
-    expect(parseBlock(src)).toEqual([
-      { smiles: "CCO", caption: "first" },
-      { smiles: "CCC", caption: "second" },
+    expect(parseInput("# heading\n\nCCO first\n# note\nCCC second\n", "smiles")).toEqual([
+      { input: "CCO", caption: "first" },
+      { input: "CCC", caption: "second" },
     ]);
   });
 
   it("keeps a trailing CXSMILES |…| extension as part of the structure", () => {
     const cx = "*C(*)CC(*)* |$;;Pol_p;;;star_e$|";
-    expect(parseBlock(cx)).toEqual([{ smiles: cx }]);
+    expect(parseInput(cx, "smiles")).toEqual([{ input: cx }]);
   });
 
-  it("handles CRLF line endings and trailing whitespace", () => {
-    expect(parseBlock("CCO  \r\nCCC\r\n")).toEqual([
-      { smiles: "CCO" },
-      { smiles: "CCC" },
+  it("handles CRLF and trailing whitespace", () => {
+    expect(parseInput("CCO  \r\nCCC\r\n", "smiles")).toEqual([
+      { input: "CCO" },
+      { input: "CCC" },
+    ]);
+  });
+});
+
+describe("parseInput — molblock", () => {
+  it("returns one spec with the title line as caption", () => {
+    const mb = "Aspirin\n  RDKit\n\n  1  0\nM  END\n";
+    expect(parseInput(mb, "molblock")).toEqual([
+      { input: "Aspirin\n  RDKit\n\n  1  0\nM  END", caption: "Aspirin" },
     ]);
   });
 
-  it("returns an empty array for whitespace/comment-only input", () => {
-    expect(parseBlock("   \n# only a comment\n")).toEqual([]);
+  it("omits the caption when the title line is blank", () => {
+    const mb = "\n  RDKit\n\n  1  0\nM  END\n";
+    const specs = parseInput(mb, "molblock");
+    expect(specs).toHaveLength(1);
+    expect(specs[0].caption).toBeUndefined();
+  });
+});
+
+describe("parseInput — SDF", () => {
+  it("splits records on $$$$ and uses each title as its caption", () => {
+    const sdf = "Ethanol\n mb1\nM  END\n$$$$\nBenzene\n mb2\nM  END\n$$$$\n";
+    expect(parseInput(sdf, "sdf")).toEqual([
+      { input: "Ethanol\n mb1\nM  END", caption: "Ethanol" },
+      { input: "Benzene\n mb2\nM  END", caption: "Benzene" },
+    ]);
+  });
+});
+
+describe("parseInput — auto", () => {
+  it("routes SMILES to line parsing and molblocks to whole-block parsing", () => {
+    expect(parseInput("CCO\nCCC", "auto")).toHaveLength(2);
+    const mb = "Aspirin\n  RDKit\n\n  1  0\nM  END\n";
+    expect(parseInput(mb, "auto")).toEqual([
+      { input: "Aspirin\n  RDKit\n\n  1  0\nM  END", caption: "Aspirin" },
+    ]);
   });
 });
 
@@ -155,14 +197,10 @@ describe("cacheKey", () => {
 
   it("varies by dimensions and normalizes whitespace", () => {
     expect(cacheKey(" CCO ", base)).toBe("350x300|s1|CCO");
-    expect(cacheKey("CCO", { ...base, width: 100, height: 100 })).toBe(
-      "100x100|s1|CCO",
-    );
+    expect(cacheKey("CCO", { ...base, width: 100, height: 100 })).toBe("100x100|s1|CCO");
   });
 
   it("varies by the stereo-annotation flag", () => {
-    expect(cacheKey("CCO", { ...base, addStereoAnnotation: false })).toBe(
-      "350x300|s0|CCO",
-    );
+    expect(cacheKey("CCO", { ...base, addStereoAnnotation: false })).toBe("350x300|s0|CCO");
   });
 });

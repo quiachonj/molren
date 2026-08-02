@@ -14,38 +14,64 @@ export interface RenderOptions {
   addStereoAnnotation: boolean;
 }
 
-/** One entry in a block: a SMILES string with an optional caption. */
+/** One entry in a block: molecule text (SMILES or molblock) + optional caption. */
 export interface MoleculeSpec {
-  smiles: string;
+  input: string;
   caption?: string;
 }
+
+/** How a code block's contents should be parsed. */
+export type InputFormat = "smiles" | "molblock" | "sdf" | "auto";
 
 /** Bond stroke width passed to RDKit. Kept internal (not user-facing yet). */
 const BOND_LINE_WIDTH = 1.2;
 
 /**
- * Parses a `smiles` block into one spec per non-empty, non-comment line. The
- * first whitespace-delimited token is the SMILES; anything after it is a
- * caption. Lines starting with `#` are treated as comments.
+ * Sniffs the format of a block's contents for the auto-detecting `chem` fence.
+ * SDF wins (it contains molblocks + `$$$$`); a lone `M  END` / `V2000|V3000`
+ * marks a molblock; everything else is treated as SMILES.
  */
-export function parseBlock(source: string): MoleculeSpec[] {
+export function detectFormat(source: string): "smiles" | "molblock" | "sdf" {
+  if (/\$\$\$\$/.test(source)) return "sdf";
+  if (/^M {2}END\s*$/m.test(source) || /\bV[23]000\b/.test(source)) {
+    return "molblock";
+  }
+  return "smiles";
+}
+
+/** Parses a block's contents into one spec per structure. */
+export function parseInput(source: string, format: InputFormat): MoleculeSpec[] {
+  const fmt = format === "auto" ? detectFormat(source) : format;
+  switch (fmt) {
+    case "sdf":
+      return parseSdf(source);
+    case "molblock":
+      return parseMolblock(source);
+    case "smiles":
+    default:
+      return parseSmilesLines(source);
+  }
+}
+
+/** One SMILES per non-empty, non-comment line; caption after first whitespace. */
+function parseSmilesLines(source: string): MoleculeSpec[] {
   const specs: MoleculeSpec[] = [];
   for (const raw of source.split(/\r?\n/)) {
     const line = raw.trim();
     if (line.length === 0 || line.startsWith("#")) continue;
     const gap = line.search(/\s/);
     if (gap === -1) {
-      specs.push({ smiles: line });
+      specs.push({ input: line });
       continue;
     }
     const rest = line.slice(gap + 1).trim();
     // A trailing `|…|` block is a CXSMILES extension, not a caption — the whole
     // line (including the space) is the structure and must be passed to RDKit.
     if (rest.startsWith("|") && rest.endsWith("|")) {
-      specs.push({ smiles: line });
+      specs.push({ input: line });
     } else {
       specs.push({
-        smiles: line.slice(0, gap),
+        input: line.slice(0, gap),
         caption: rest.length > 0 ? rest : undefined,
       });
     }
@@ -53,30 +79,59 @@ export function parseBlock(source: string): MoleculeSpec[] {
   return specs;
 }
 
+/** A single molblock. The molfile title line (line 1) becomes the caption. */
+function parseMolblock(source: string): MoleculeSpec[] {
+  const input = source.replace(/\s+$/, "");
+  if (input.trim().length === 0) return [];
+  return [{ input, caption: titleLine(input) }];
+}
+
+/** Splits an SDF on `$$$$` into one spec per record; title line → caption. */
+function parseSdf(source: string): MoleculeSpec[] {
+  const specs: MoleculeSpec[] = [];
+  for (const chunk of source.split("$$$$")) {
+    // Drop the single leading newline left over from the `$$$$\n` separator,
+    // but preserve the rest so the molblock's line structure stays intact.
+    const record = chunk.replace(/^\r?\n/, "").replace(/\s+$/, "");
+    if (record.trim().length === 0) continue;
+    specs.push({ input: record, caption: titleLine(record) });
+  }
+  return specs;
+}
+
+/** The molfile title line (line 1), or undefined if blank. */
+function titleLine(molblock: string): string | undefined {
+  const first = molblock.split(/\r?\n/, 1)[0]?.trim();
+  return first && first.length > 0 ? first : undefined;
+}
+
 /**
- * Pure SMILES → SVG conversion. Kept free of Obsidian and DOM so it can be
- * unit-tested against a mocked RDKit module. Owns the JSMol lifetime: every
- * handle it creates is delete()'d before returning.
+ * Pure structure → SVG conversion. Accepts SMILES or a molblock (RDKit's
+ * get_mol handles both). Kept free of Obsidian and DOM so it can be unit-tested
+ * against a mocked RDKit module. Owns the JSMol lifetime: every handle it
+ * creates is delete()'d before returning.
  */
 export function molToSvg(
   RDKit: RDKitModule,
-  smiles: string,
+  input: string,
   opts: RenderOptions,
 ): RenderResult {
-  const input = smiles.trim();
-  if (!input) {
-    return { ok: false, error: "empty SMILES" };
+  const text = input.trim();
+  if (!text) {
+    return { ok: false, error: "empty input" };
   }
 
   let mol: ReturnType<RDKitModule["get_mol"]> = null;
   try {
-    mol = RDKit.get_mol(input);
+    mol = RDKit.get_mol(text);
     if (!mol || !mol.is_valid()) {
-      return { ok: false, error: `invalid SMILES: ${input}` };
+      return { ok: false, error: `invalid structure: ${preview(text)}` };
     }
-    // SMILES carry no coordinates; generate a fresh CoordGen 2D layout.
-    // (When molblock/SDF input lands, guard this so authored coords survive.)
-    mol.set_new_coords(true);
+    // Generate a CoordGen 2D layout only when the input carries none (SMILES).
+    // Molblocks/SDF bring authored coordinates, which we must preserve.
+    if (!mol.has_coords()) {
+      mol.set_new_coords(true);
+    }
     const svg = stripXmlProlog(mol.get_svg_with_highlights(drawDetails(opts)));
     return { ok: true, svg };
   } catch (err) {
@@ -114,12 +169,13 @@ export class MoleculeRenderer {
     source: string,
     el: HTMLElement,
     settings: MolrenSettings,
+    format: InputFormat,
   ): Promise<void> {
     el.empty();
 
-    const specs = parseBlock(source);
+    const specs = parseInput(source, format);
     if (specs.length === 0) {
-      this.mountError(el, "empty SMILES block");
+      this.mountError(el, "empty block");
       return;
     }
 
@@ -152,10 +208,10 @@ export class MoleculeRenderer {
     spec: MoleculeSpec,
     settings: MolrenSettings,
   ): void {
-    const key = cacheKey(spec.smiles, settings);
+    const key = cacheKey(spec.input, settings);
     let svg = this.cache.get(key);
     if (svg === undefined) {
-      const result = molToSvg(RDKit, spec.smiles, {
+      const result = molToSvg(RDKit, spec.input, {
         width: settings.width,
         height: settings.height,
         addStereoAnnotation: settings.addStereoAnnotation,
@@ -190,9 +246,15 @@ export class MoleculeRenderer {
   }
 }
 
-export function cacheKey(smiles: string, settings: MolrenSettings): string {
+export function cacheKey(input: string, settings: MolrenSettings): string {
   const stereo = settings.addStereoAnnotation ? "s1" : "s0";
-  return `${settings.width}x${settings.height}|${stereo}|${smiles.trim()}`;
+  return `${settings.width}x${settings.height}|${stereo}|${input.trim()}`;
+}
+
+/** Short one-line preview of an input for error messages. */
+function preview(text: string): string {
+  const first = text.split(/\r?\n/, 1)[0]?.trim() ?? "";
+  return first.length > 60 ? `${first.slice(0, 57)}…` : first;
 }
 
 function messageOf(err: unknown): string {

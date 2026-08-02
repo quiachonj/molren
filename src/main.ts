@@ -5,7 +5,7 @@ import {
   MolrenSettingTab,
 } from "./settings";
 import { RDKitLoader } from "./rdkit";
-import { MoleculeRenderer } from "./renderer";
+import { MoleculeRenderer, type InputFormat } from "./renderer";
 
 export default class MolrenPlugin extends Plugin {
   settings!: MolrenSettings;
@@ -20,10 +20,19 @@ export default class MolrenPlugin extends Plugin {
 
     this.addSettingTab(new MolrenSettingTab(this.app, this));
 
-    // ```smiles``` fenced blocks → 2D structure.
-    this.registerMarkdownCodeBlockProcessor("smiles", async (source, el) => {
-      await this.renderer.render(source, el, this.settings);
-    });
+    // Fenced code blocks → 2D structures. Dedicated fences state their format
+    // (and so how coordinates are handled); `chem` auto-detects.
+    const fences: Record<string, InputFormat> = {
+      smiles: "smiles",
+      mol: "molblock",
+      sdf: "sdf",
+      chem: "auto",
+    };
+    for (const [lang, format] of Object.entries(fences)) {
+      this.registerMarkdownCodeBlockProcessor(lang, async (source, el) => {
+        await this.renderer.render(source, el, this.settings, format);
+      });
+    }
   }
 
   onunload(): void {
