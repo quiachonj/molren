@@ -4,6 +4,7 @@ import {
   molToSvg,
   rxnToSvg,
   isReaction,
+  recolorForTheme,
   cacheKey,
   parseInput,
   detectFormat,
@@ -161,6 +162,28 @@ describe("rxnToSvg", () => {
       svg: "<?xml version='1.0'?>\n<svg>r</svg>",
     });
     expect(rxnToSvg(rdkit, "CCO>>CC=O", OPTS)).toEqual({ ok: true, svg: "<svg>r</svg>" });
+  });
+});
+
+describe("recolorForTheme", () => {
+  it("rewrites black skeleton ink as a CSS variable", () => {
+    expect(recolorForTheme("stroke:#000000;")).toBe(
+      "stroke:var(--molren-ink, #1a1a1a);",
+    );
+  });
+
+  it("rewrites O (red) and N (blue) as CSS variables", () => {
+    expect(recolorForTheme("fill:#FF0000")).toBe("fill:var(--molren-o, #d93526)");
+    expect(recolorForTheme("fill:#0000ff")).toBe("fill:var(--molren-n, #1f6feb)");
+  });
+
+  it("leaves the transparent #FFFFFF00 background untouched", () => {
+    const bg = "fill:#FFFFFF00;stroke:none";
+    expect(recolorForTheme(bg)).toBe(bg);
+  });
+
+  it("does not touch black inside an 8-digit hex color", () => {
+    expect(recolorForTheme("#00000080")).toBe("#00000080");
   });
 });
 

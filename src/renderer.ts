@@ -156,8 +156,7 @@ export function molToSvg(
     if (!mol.has_coords()) {
       mol.set_new_coords(true);
     }
-    const svg = stripXmlProlog(mol.get_svg_with_highlights(drawDetails(opts)));
-    return { ok: true, svg };
+    return { ok: true, svg: finishSvg(mol.get_svg_with_highlights(drawDetails(opts))) };
   } catch (err) {
     return { ok: false, error: messageOf(err) };
   } finally {
@@ -185,8 +184,7 @@ export function rxnToSvg(
     if (!rxn) {
       return { ok: false, error: `invalid reaction: ${preview(text)}` };
     }
-    const svg = stripXmlProlog(rxn.get_svg_with_highlights(drawDetails(opts)));
-    return { ok: true, svg };
+    return { ok: true, svg: finishSvg(rxn.get_svg_with_highlights(drawDetails(opts))) };
   } catch (err) {
     return { ok: false, error: messageOf(err) };
   } finally {
@@ -334,10 +332,30 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Post-process RDKit's raw SVG: drop the xml prolog, then theme its colors. */
+function finishSvg(raw: string): string {
+  return recolorForTheme(stripXmlProlog(raw));
+}
+
 /**
  * RDKit prefixes its SVG with an `<?xml … ?>` declaration. When assigned via
  * innerHTML the HTML parser turns that into a stray comment node, so strip it.
  */
 function stripXmlProlog(svg: string): string {
   return svg.replace(/^\s*<\?xml[^>]*\?>\s*/i, "");
+}
+
+/**
+ * Rewrites RDKit's hardcoded skeleton/heteroatom colors as CSS custom
+ * properties. RDKit emits colors inside inline `style='…'`, so `var()` resolves
+ * against the properties defined on `.molren-container` in styles.css. This lets
+ * one cached, theme-independent SVG adapt live to light/dark — no re-render.
+ * The `(?![0-9A-Fa-f]{2})` guard avoids matching inside 8-digit hex like the
+ * transparent `#FFFFFF00` background.
+ */
+export function recolorForTheme(svg: string): string {
+  return svg
+    .replace(/#000000(?![0-9A-Fa-f]{2})/gi, "var(--molren-ink, #1a1a1a)")
+    .replace(/#0000FF(?![0-9A-Fa-f]{2})/gi, "var(--molren-n, #1f6feb)")
+    .replace(/#FF0000(?![0-9A-Fa-f]{2})/gi, "var(--molren-o, #d93526)");
 }
