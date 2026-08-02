@@ -10,6 +10,8 @@ CC(=O)Oc1ccccc1C(=O)O
 
 → renders aspirin as a clean, theme-aware structure.
 
+**Website:** [molren.amberlogica.com](https://molren.amberlogica.com)
+
 ## What it's for
 
 Molren is for anyone who keeps chemistry in Obsidian — students, chemists, researchers, teachers — and wants their notes to _show_ the molecules, not just spell them out.
@@ -212,6 +214,13 @@ How it fits together:
 - [x] Theme-aware (dark mode) coloring
 - [ ] Interactive structure editor (evaluating Ketcher vs Kekule.js)
 - [ ] Optional 3D view (Mol\* / 3Dmol.js) for macromolecules
+
+## Support
+
+Molren is free and open source. If it helps your notes, you can support its
+development — thank you!
+
+[☕ Buy me a coffee](https://buymeacoffee.com/joshquiachon)
 
 ## License
 
