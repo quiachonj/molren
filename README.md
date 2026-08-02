@@ -14,21 +14,19 @@ Molren is for anyone who keeps chemistry in Obsidian — students, chemists, res
 
 ## Install
 
-> [!NOTE]
-> Molren isn't in the community plugin store yet.
+In Obsidian: **Settings → Community plugins → Browse**, search **Molren**, then **Install** and **Enable**.
 
-**Option A — BRAT (recommended for updates).** Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin, then _Add beta plugin_ with `quiachonj/molren`.
+<details>
+<summary><b>Other ways to install</b></summary>
 
-**Option B — Manual.** Download `main.js`, `manifest.json`, `styles.css`, and `RDKit_minimal.wasm` from a release, copy all four into `<your-vault>/.obsidian/plugins/molren/`, then reload Obsidian.
+- **BRAT** — to test the latest pre-release, add `quiachonj/molren` in the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
+- **Manual** — download `main.js`, `manifest.json`, `styles.css`, and `RDKit_minimal.wasm` from a [release](https://github.com/quiachonj/molren/releases) into `<your-vault>/.obsidian/plugins/molren/`, then reload Obsidian. All four files must be present — Molren reads the `.wasm` (~7 MB) at runtime.
+- **From source** — see [Development](#development).
 
-**Option C — From source.** See [Development](#development).
-
-Then enable **Molren** under **Settings → Community plugins**.
-
-<!-- Once published: Settings → Community plugins → Browse → search "Molren" → Install → Enable. -->
+</details>
 
 > [!IMPORTANT]
-> `RDKit_minimal.wasm` (~7 MB) must sit next to `main.js` in the plugin folder — Molren reads it at runtime and hands the bytes to RDKit. If it's missing, blocks show a load error. Molren is desktop-only and requires Obsidian 1.4.0+.
+> Molren is desktop-only and requires Obsidian 1.4.0 or later.
 
 ## Usage
 
