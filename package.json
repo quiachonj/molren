@@ -1,6 +1,6 @@
 {
   "name": "molren",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Render 2D chemical structures from SMILES in Obsidian notes, powered by RDKit.js.",
   "type": "module",
   "main": "main.js",
