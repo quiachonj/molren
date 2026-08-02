@@ -6,9 +6,11 @@
 
 Molren is for anyone who keeps chemistry in Obsidian — students, chemists, researchers, teachers — and wants their notes to _show_ the molecules, not just spell them out. Your structures stay as searchable, version-controllable text; the drawing is generated on the fly, offline, with nothing uploaded.
 
-<!-- TODO: add a real screenshot at docs/screenshot.png (a note with a rendered structure, ideally in dark mode). -->
-
-![Molren rendering a structure inline in an Obsidian note](docs/screenshot.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png" />
+  <img alt="Molren rendering L- and D-alanine with stereo annotations inline in an Obsidian note" src="docs/screenshot-light.png" />
+</picture>
 
 ## Install
 
