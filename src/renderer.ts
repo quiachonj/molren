@@ -10,7 +10,12 @@ export type RenderResult =
 export interface RenderOptions {
   width: number;
   height: number;
+  /** Draw R/S and E/Z labels on stereocenters and double bonds. */
+  addStereoAnnotation: boolean;
 }
+
+/** Bond stroke width passed to RDKit. Kept internal (not user-facing yet). */
+const BOND_LINE_WIDTH = 1.2;
 
 /**
  * Pure SMILES → SVG conversion. Kept free of Obsidian and DOM so it can be
@@ -33,7 +38,10 @@ export function molToSvg(
     if (!mol || !mol.is_valid()) {
       return { ok: false, error: `invalid SMILES: ${input}` };
     }
-    const svg = stripXmlProlog(mol.get_svg(opts.width, opts.height));
+    // SMILES carry no coordinates; generate a fresh CoordGen 2D layout.
+    // (When molblock/SDF input lands, guard this so authored coords survive.)
+    mol.set_new_coords(true);
+    const svg = stripXmlProlog(mol.get_svg_with_highlights(drawDetails(opts)));
     return { ok: true, svg };
   } catch (err) {
     return { ok: false, error: messageOf(err) };
@@ -42,9 +50,23 @@ export function molToSvg(
   }
 }
 
+/** Serializes RDKit MolDrawOptions. Unknown keys are ignored by RDKit. */
+function drawDetails(opts: RenderOptions): string {
+  return JSON.stringify({
+    width: opts.width,
+    height: opts.height,
+    bondLineWidth: BOND_LINE_WIDTH,
+    addStereoAnnotation: opts.addStereoAnnotation,
+    // Transparent: the ".molren-container" CSS card supplies the surface, so
+    // rounded corners stay clean and the depiction reads in light and dark.
+    backgroundColour: [1, 1, 1, 0],
+    padding: 0.08,
+  });
+}
+
 /**
  * Bridges the pure renderer to Obsidian: loads RDKit, caches SVG by
- * input+dimensions, and mounts the result (or an inline error) into the block.
+ * input+options, and mounts the result (or an inline error) into the block.
  */
 export class MoleculeRenderer {
   private readonly cache = new Map<string, string>();
@@ -80,6 +102,7 @@ export class MoleculeRenderer {
     const result = molToSvg(RDKit, smiles, {
       width: settings.width,
       height: settings.height,
+      addStereoAnnotation: settings.addStereoAnnotation,
     });
 
     if (!result.ok) {
@@ -111,7 +134,8 @@ export class MoleculeRenderer {
 }
 
 export function cacheKey(smiles: string, settings: MolrenSettings): string {
-  return `${settings.width}x${settings.height}|${smiles.trim()}`;
+  const stereo = settings.addStereoAnnotation ? "s1" : "s0";
+  return `${settings.width}x${settings.height}|${stereo}|${smiles.trim()}`;
 }
 
 function messageOf(err: unknown): string {

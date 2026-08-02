@@ -46,7 +46,11 @@ export class RDKitLoader {
 
   private async init(): Promise<RDKitModule> {
     const wasmBinary = await this.readWasm();
-    return initRDKitModule({ wasmBinary });
+    const rdkit = await initRDKitModule({ wasmBinary });
+    // Use Schrödinger's CoordGen for 2D layout — noticeably better depictions
+    // for fused rings, macrocycles, and natural products than RDKit's default.
+    rdkit.prefer_coordgen(true);
+    return rdkit;
   }
 
   private async readWasm(): Promise<ArrayBuffer> {

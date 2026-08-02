@@ -6,11 +6,14 @@ export interface MolrenSettings {
   width: number;
   /** Rendered SVG height in pixels. */
   height: number;
+  /** Draw R/S and E/Z labels on stereocenters and double bonds. */
+  addStereoAnnotation: boolean;
 }
 
 export const DEFAULT_SETTINGS: MolrenSettings = {
   width: 350,
   height: 300,
+  addStereoAnnotation: true,
 };
 
 const MIN_DIM = 100;
@@ -48,6 +51,18 @@ export class MolrenSettingTab extends PluginSettingTab {
           .setValue(String(this.plugin.settings.height))
           .onChange(async (value) => {
             this.plugin.settings.height = clampDim(value, DEFAULT_SETTINGS.height);
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Stereo annotations")
+      .setDesc("Label stereocenters (R/S) and double-bond geometry (E/Z).")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.addStereoAnnotation)
+          .onChange(async (value) => {
+            this.plugin.settings.addStereoAnnotation = value;
             await this.plugin.saveSettings();
           }),
       );
