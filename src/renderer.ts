@@ -14,8 +14,44 @@ export interface RenderOptions {
   addStereoAnnotation: boolean;
 }
 
+/** One entry in a block: a SMILES string with an optional caption. */
+export interface MoleculeSpec {
+  smiles: string;
+  caption?: string;
+}
+
 /** Bond stroke width passed to RDKit. Kept internal (not user-facing yet). */
 const BOND_LINE_WIDTH = 1.2;
+
+/**
+ * Parses a `smiles` block into one spec per non-empty, non-comment line. The
+ * first whitespace-delimited token is the SMILES; anything after it is a
+ * caption. Lines starting with `#` are treated as comments.
+ */
+export function parseBlock(source: string): MoleculeSpec[] {
+  const specs: MoleculeSpec[] = [];
+  for (const raw of source.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith("#")) continue;
+    const gap = line.search(/\s/);
+    if (gap === -1) {
+      specs.push({ smiles: line });
+      continue;
+    }
+    const rest = line.slice(gap + 1).trim();
+    // A trailing `|…|` block is a CXSMILES extension, not a caption — the whole
+    // line (including the space) is the structure and must be passed to RDKit.
+    if (rest.startsWith("|") && rest.endsWith("|")) {
+      specs.push({ smiles: line });
+    } else {
+      specs.push({
+        smiles: line.slice(0, gap),
+        caption: rest.length > 0 ? rest : undefined,
+      });
+    }
+  }
+  return specs;
+}
 
 /**
  * Pure SMILES → SVG conversion. Kept free of Obsidian and DOM so it can be
@@ -66,7 +102,8 @@ function drawDetails(opts: RenderOptions): string {
 
 /**
  * Bridges the pure renderer to Obsidian: loads RDKit, caches SVG by
- * input+options, and mounts the result (or an inline error) into the block.
+ * input+options, and mounts a single structure or a responsive grid of them
+ * (each with an optional caption and per-cell error handling).
  */
 export class MoleculeRenderer {
   private readonly cache = new Map<string, string>();
@@ -78,16 +115,11 @@ export class MoleculeRenderer {
     el: HTMLElement,
     settings: MolrenSettings,
   ): Promise<void> {
-    const smiles = source.trim();
-    if (!smiles) {
-      this.mountError(el, "empty SMILES block");
-      return;
-    }
+    el.empty();
 
-    const key = cacheKey(smiles, settings);
-    const cached = this.cache.get(key);
-    if (cached) {
-      this.mountSvg(el, cached);
+    const specs = parseBlock(source);
+    if (specs.length === 0) {
+      this.mountError(el, "empty SMILES block");
       return;
     }
 
@@ -99,35 +131,60 @@ export class MoleculeRenderer {
       return;
     }
 
-    const result = molToSvg(RDKit, smiles, {
-      width: settings.width,
-      height: settings.height,
-      addStereoAnnotation: settings.addStereoAnnotation,
+    const multiple = specs.length > 1;
+    const root = el.createDiv({
+      cls: multiple ? "molren-grid" : "molren-single",
     });
-
-    if (!result.ok) {
-      this.mountError(el, result.error);
-      return;
+    if (multiple) {
+      // Responsive: columns fit as many cards of the chosen width as possible.
+      root.style.gridTemplateColumns = `repeat(auto-fill, minmax(${settings.width}px, 1fr))`;
     }
 
-    this.cache.set(key, result.svg);
-    this.mountSvg(el, result.svg);
+    for (const spec of specs) {
+      const cell = root.createDiv({ cls: "molren-cell" });
+      this.renderInto(cell, RDKit, spec, settings);
+    }
+  }
+
+  private renderInto(
+    cell: HTMLElement,
+    RDKit: RDKitModule,
+    spec: MoleculeSpec,
+    settings: MolrenSettings,
+  ): void {
+    const key = cacheKey(spec.smiles, settings);
+    let svg = this.cache.get(key);
+    if (svg === undefined) {
+      const result = molToSvg(RDKit, spec.smiles, {
+        width: settings.width,
+        height: settings.height,
+        addStereoAnnotation: settings.addStereoAnnotation,
+      });
+      if (!result.ok) {
+        this.mountError(cell, result.error);
+        if (spec.caption) this.mountCaption(cell, spec.caption);
+        return;
+      }
+      svg = result.svg;
+      this.cache.set(key, svg);
+    }
+
+    const container = cell.createDiv({ cls: "molren-container" });
+    // Trusted content: SVG is generated locally by RDKit from the note's text.
+    container.innerHTML = svg;
+    if (spec.caption) this.mountCaption(cell, spec.caption);
   }
 
   clearCache(): void {
     this.cache.clear();
   }
 
-  private mountSvg(el: HTMLElement, svg: string): void {
-    el.empty();
-    const container = el.createDiv({ cls: "molren-container" });
-    // Trusted content: SVG is generated locally by RDKit from the note's text.
-    container.innerHTML = svg;
+  private mountCaption(parent: HTMLElement, text: string): void {
+    parent.createDiv({ cls: "molren-caption", text });
   }
 
-  private mountError(el: HTMLElement, message: string): void {
-    el.empty();
-    const box = el.createDiv({ cls: "molren-error" });
+  private mountError(parent: HTMLElement, message: string): void {
+    const box = parent.createDiv({ cls: "molren-error" });
     box.createSpan({ cls: "molren-error-icon", text: "⚠" });
     box.createSpan({ text: ` Molren: ${message}` });
   }

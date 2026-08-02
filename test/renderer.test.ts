@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { RDKitModule, JSMol } from "@rdkit/rdkit";
-import { molToSvg, cacheKey } from "../src/renderer";
+import { molToSvg, cacheKey, parseBlock } from "../src/renderer";
 import type { MolrenSettings } from "../src/settings";
 
 const OPTS = { width: 350, height: 300, addStereoAnnotation: true };
@@ -102,6 +102,51 @@ describe("molToSvg", () => {
     const { rdkit, get_mol } = fakeRDKit();
     molToSvg(rdkit, "  CCO\n", OPTS);
     expect(get_mol).toHaveBeenCalledWith("CCO");
+  });
+});
+
+describe("parseBlock", () => {
+  it("returns one spec per non-empty line", () => {
+    expect(parseBlock("CCO\nc1ccccc1\n")).toEqual([
+      { smiles: "CCO" },
+      { smiles: "c1ccccc1" },
+    ]);
+  });
+
+  it("captures a caption after the first whitespace", () => {
+    expect(parseBlock("CCO Ethanol")).toEqual([
+      { smiles: "CCO", caption: "Ethanol" },
+    ]);
+  });
+
+  it("keeps multi-word captions intact", () => {
+    expect(parseBlock("CC(=O)O   acetic acid")).toEqual([
+      { smiles: "CC(=O)O", caption: "acetic acid" },
+    ]);
+  });
+
+  it("skips blank lines and # comments", () => {
+    const src = "# heading\n\nCCO first\n\n# note\nCCC second\n";
+    expect(parseBlock(src)).toEqual([
+      { smiles: "CCO", caption: "first" },
+      { smiles: "CCC", caption: "second" },
+    ]);
+  });
+
+  it("keeps a trailing CXSMILES |…| extension as part of the structure", () => {
+    const cx = "*C(*)CC(*)* |$;;Pol_p;;;star_e$|";
+    expect(parseBlock(cx)).toEqual([{ smiles: cx }]);
+  });
+
+  it("handles CRLF line endings and trailing whitespace", () => {
+    expect(parseBlock("CCO  \r\nCCC\r\n")).toEqual([
+      { smiles: "CCO" },
+      { smiles: "CCC" },
+    ]);
+  });
+
+  it("returns an empty array for whitespace/comment-only input", () => {
+    expect(parseBlock("   \n# only a comment\n")).toEqual([]);
   });
 });
 
