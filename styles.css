@@ -62,10 +62,19 @@
 }
 
 .molren-error {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
   padding: 0.5rem 0.75rem;
   margin: 0.25rem 0;
   border-radius: var(--radius-m, 8px);
-  background: var(--background-modifier-error, rgba(255, 0, 0, 0.1));
+  /*
+   * A translucent red *tint* (not --background-modifier-error, which is a solid
+   * bright red in many themes) keeps the red error text readable in light and
+   * dark. --color-red-rgb is provided by Obsidian; the fallback matches it.
+   */
+  background: rgba(var(--color-red-rgb, 233, 49, 71), 0.12);
+  border: 1px solid rgba(var(--color-red-rgb, 233, 49, 71), 0.35);
   color: var(--text-error, #c0392b);
   font-family: var(--font-monospace);
   font-size: var(--font-ui-small, 0.85em);
@@ -74,5 +83,5 @@
 }
 
 .molren-error-icon {
-  margin-right: 0.25rem;
+  flex: none;
 }
