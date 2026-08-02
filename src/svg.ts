@@ -113,19 +113,35 @@ function stripXmlProlog(svg: string): string {
   return svg.replace(/^\s*<\?xml[^>]*\?>\s*/i, "");
 }
 
+/** Below this per-channel value a grayscale color counts as structural "ink". */
+const INK_MAX_CHANNEL = 0x40;
+
 /**
- * Rewrites RDKit's hardcoded skeleton/heteroatom colors as CSS custom
- * properties. RDKit emits colors inside inline `style='…'`, so `var()` resolves
- * against the properties defined on `.molren-container` in styles.css. This lets
- * one cached, theme-independent SVG adapt live to light/dark — no re-render.
- * The `(?![0-9A-Fa-f]{2})` guard avoids matching inside 8-digit hex like the
- * transparent `#FFFFFF00` background.
+ * Rewrites RDKit's hardcoded colors as CSS custom properties. RDKit emits colors
+ * inside inline `style='…'`, so `var()` resolves against the properties defined
+ * on `.molren-container` in styles.css — one cached, theme-independent SVG then
+ * adapts live to light/dark with no re-render.
+ *
+ * Oxygen (red) and nitrogen (blue) map to dedicated variables. Everything that
+ * is dark and (near-)grayscale — bonds, carbons, dummy atoms (#191919), and
+ * annotations — is treated as ink; other saturated colors (e.g. CPK sulfur) are
+ * left as RDKit drew them. The `(?![0-9A-Fa-f]{2})` guard avoids matching the
+ * first six digits of an 8-digit hex such as the transparent `#FFFFFF00` back-
+ * ground.
  */
 export function recolorForTheme(svg: string): string {
-  return svg
-    .replace(/#000000(?![0-9A-Fa-f]{2})/gi, "var(--molren-ink, #1a1a1a)")
-    .replace(/#0000FF(?![0-9A-Fa-f]{2})/gi, "var(--molren-n, #1f6feb)")
-    .replace(/#FF0000(?![0-9A-Fa-f]{2})/gi, "var(--molren-o, #d93526)");
+  return svg.replace(/#[0-9A-Fa-f]{6}(?![0-9A-Fa-f]{2})/g, (hex) => {
+    const value = hex.toUpperCase();
+    if (value === "#FF0000") return "var(--molren-o, #d93526)";
+    if (value === "#0000FF") return "var(--molren-n, #1f6feb)";
+    const r = parseInt(value.slice(1, 3), 16);
+    const g = parseInt(value.slice(3, 5), 16);
+    const b = parseInt(value.slice(5, 7), 16);
+    if (r === g && g === b && r <= INK_MAX_CHANNEL) {
+      return "var(--molren-ink, #1a1a1a)";
+    }
+    return hex;
+  });
 }
 
 /** Short one-line preview of an input for error messages. */

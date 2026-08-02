@@ -191,6 +191,12 @@ describe("recolorForTheme", () => {
     );
   });
 
+  it("rewrites RDKit's dark-gray dummy-atom ink (#191919) as ink", () => {
+    expect(recolorForTheme("stroke:#191919;")).toBe(
+      "stroke:var(--molren-ink, #1a1a1a);",
+    );
+  });
+
   it("rewrites O (red) and N (blue) as CSS variables", () => {
     expect(recolorForTheme("fill:#FF0000")).toBe(
       "fill:var(--molren-o, #d93526)",
@@ -198,6 +204,12 @@ describe("recolorForTheme", () => {
     expect(recolorForTheme("fill:#0000ff")).toBe(
       "fill:var(--molren-n, #1f6feb)",
     );
+  });
+
+  it("leaves light and saturated (non-ink) colors untouched", () => {
+    // White, and CPK sulfur — neither is dark grayscale.
+    expect(recolorForTheme("fill:#FFFFFF")).toBe("fill:#FFFFFF");
+    expect(recolorForTheme("fill:#CCCC00")).toBe("fill:#CCCC00");
   });
 
   it("leaves the transparent #FFFFFF00 background untouched", () => {
