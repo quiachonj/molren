@@ -1,17 +1,27 @@
 import type { RDKitModule } from "@rdkit/rdkit";
-// The RDKit wasm is inlined into the bundle as a base64 string by esbuild's
-// "base64" loader (see esbuild.config.mjs); decodeBase64() turns it back into
-// bytes at load time.
-import rdkitWasmBase64 from "@rdkit/rdkit/dist/RDKit_minimal.wasm";
+// The RDKit wasm is inlined into the bundle as a *gzipped* base64 string by the
+// esbuild plugin (see esbuild.config.mjs). At load we base64-decode then gunzip
+// it — keeping main.js ~3 MB instead of ~9.4 MB.
+import rdkitWasmGzipBase64 from "@rdkit/rdkit/dist/RDKit_minimal.wasm";
 
 /** Decode a base64 string to bytes using the platform's atob (Electron/Node). */
-function decodeBase64(base64: string): Uint8Array {
+function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+/** Gunzip bytes via DecompressionStream (a web standard available in Electron). */
+async function gunzip(
+  gzipped: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const stream = new Blob([gzipped])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 /**
@@ -57,15 +67,17 @@ export class RDKitLoader {
   /** Returns the initialized RDKit module, initializing on first call. */
   load(): Promise<RDKitModule> {
     if (!this.modulePromise) {
-      const wasmBinary = decodeBase64(rdkitWasmBase64);
-      this.modulePromise = initRDKitModule({ wasmBinary }).catch(
-        (err: unknown) => {
-          // Reset so a later render can retry instead of caching the failure.
-          this.modulePromise = null;
-          throw err;
-        },
-      );
+      this.modulePromise = this.init().catch((err: unknown) => {
+        // Reset so a later render can retry instead of caching the failure.
+        this.modulePromise = null;
+        throw err;
+      });
     }
     return this.modulePromise;
+  }
+
+  private async init(): Promise<RDKitModule> {
+    const wasmBinary = await gunzip(decodeBase64(rdkitWasmGzipBase64));
+    return initRDKitModule({ wasmBinary });
   }
 }
