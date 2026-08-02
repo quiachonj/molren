@@ -1,0 +1,39 @@
+/* Molren — rendered structure blocks */
+
+.molren-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem;
+  margin: 0.25rem 0;
+  /*
+   * RDKit draws black bonds on a transparent ground, which disappears in dark
+   * mode. Rather than filter-invert (which corrupts colored heteroatoms), we
+   * give every structure a light "molecule card" so it reads in both themes.
+   */
+  background: #ffffff;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 8px);
+  overflow-x: auto;
+}
+
+.molren-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.molren-error {
+  padding: 0.5rem 0.75rem;
+  margin: 0.25rem 0;
+  border-radius: var(--radius-m, 8px);
+  background: var(--background-modifier-error, rgba(255, 0, 0, 0.1));
+  color: var(--text-error, #c0392b);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small, 0.85em);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.molren-error-icon {
+  margin-right: 0.25rem;
+}

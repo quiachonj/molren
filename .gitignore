@@ -1,0 +1,15 @@
+# build output (bundled at release time)
+main.js
+main.js.map
+RDKit_minimal.wasm
+
+# deps
+node_modules/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log
+
+# test / coverage
+coverage/
