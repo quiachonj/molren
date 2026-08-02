@@ -24,7 +24,7 @@ In Obsidian: **Settings → Community plugins → Browse**, search **Molren**, t
 <summary><b>Other ways to install</b></summary>
 
 - **BRAT** — to test the latest pre-release, add `quiachonj/molren` in the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
-- **Manual** — download `main.js`, `manifest.json`, `styles.css`, and `RDKit_minimal.wasm` from a [release](https://github.com/quiachonj/molren/releases) into `<your-vault>/.obsidian/plugins/molren/`, then reload Obsidian. All four files must be present — Molren reads the `.wasm` (~7 MB) at runtime.
+- **Manual** — download `main.js`, `manifest.json`, and `styles.css` from a [release](https://github.com/quiachonj/molren/releases) into `<your-vault>/.obsidian/plugins/molren/`, then reload Obsidian.
 - **From source** — see [Development](#development).
 
 </details>
@@ -165,14 +165,14 @@ renderer.ts →  layout (single│grid│reaction stack), cache, mount
 | `src/parse.ts`    | Format detection and parsing block text into structure specs.          |
 | `src/svg.ts`      | Pure RDKit → SVG conversion (molecules + reactions) and theming.       |
 | `src/renderer.ts` | Obsidian/DOM bridge: layout, caching, and mounting.                    |
-| `src/rdkit.ts`    | Lazy, one-time RDKit wasm init (reads the wasm via the vault adapter). |
+| `src/rdkit.ts`    | Lazy, one-time RDKit wasm init from the inlined (base64) wasm bytes.   |
 | `src/settings.ts` | Settings tab (dimensions, stereo annotations).                         |
 
 ## Development
 
 ```bash
 npm install      # installs deps and pulls in the RDKit wasm
-npm run dev      # esbuild watch → main.js (+ copies the wasm)
+npm run dev      # esbuild watch → main.js (wasm inlined)
 npm test         # vitest
 npm run lint     # eslint (incl. Obsidian plugin rules)
 npm run format   # prettier --write
@@ -188,7 +188,7 @@ To develop against a real vault, symlink `molren/` into a test vault's
 > [!IMPORTANT]
 > Molren is desktop-only (`isDesktopOnly: true`) and targets `minAppVersion` 1.4.0, so it uses the classic settings-tab API rather than the declarative one from 1.13.
 
-1. **wasm delivery.** The RDKit `.wasm` is shipped beside the plugin and read through the vault adapter, then passed to `initRDKitModule({ wasmBinary })` — `file://`/`app://` fetches are unreliable in the Obsidian/Electron sandbox.
+1. **wasm delivery.** The RDKit `.wasm` (~7 MB) is inlined into `main.js` as base64 (esbuild `base64` loader), decoded with `atob` at load, and passed to `initRDKitModule({ wasmBinary })`. This is required because community-store and BRAT installs only download `main.js`/`manifest.json`/`styles.css` — extra release assets aren't fetched, so the wasm can't ship as a separate file.
 2. **Coordinates.** SMILES carry none, so Molren generates a CoordGen 2D layout; molfiles/SDF bring their own, which are preserved. The choice is made per structure via RDKit's `has_coords()`, not by fence.
 3. **Theming.** RDKit bakes fixed colors into the SVG. Molren rewrites any dark near-grayscale "ink" (bonds, carbons, dummy atoms drawn as `#191919`, annotations) plus O/N as CSS variables, so one cached SVG adapts to light/dark live.
 4. **SVG insertion.** Parsed via `DOMParser` + `importNode` (not `innerHTML`) per Obsidian's guidelines.

@@ -12,7 +12,7 @@ export default class MolrenPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
-    this.loader = new RDKitLoader(this.app, this.manifest);
+    this.loader = new RDKitLoader();
     this.renderer = new MoleculeRenderer(this.loader);
 
     this.addSettingTab(new MolrenSettingTab(this.app, this));

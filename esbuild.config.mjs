@@ -1,7 +1,5 @@
 import esbuild from "esbuild";
 import process from "process";
-import fs from "fs";
-import path from "path";
 import builtins from "builtin-modules";
 
 const prod = process.argv[2] === "production";
@@ -10,25 +8,6 @@ const banner = `/*
 Molren — Obsidian plugin. This is a generated file. Do not edit.
 Source: https://github.com/quiachonj/molren
 */`;
-
-/**
- * RDKit ships an emscripten .wasm blob separately from its JS glue. We bundle
- * the glue into main.js (below) but must ship the .wasm alongside the plugin so
- * it can be read at runtime and passed to initRDKitModule({ wasmBinary }).
- */
-function copyWasm() {
-  const src = path.resolve("node_modules/@rdkit/rdkit/dist/RDKit_minimal.wasm");
-  const dest = path.resolve("RDKit_minimal.wasm");
-  if (!fs.existsSync(src)) {
-    throw new Error(
-      `Could not find RDKit wasm at ${src}. Run "npm install" first.`,
-    );
-  }
-  fs.copyFileSync(src, dest);
-  console.log(
-    `Copied RDKit_minimal.wasm (${(fs.statSync(dest).size / 1e6).toFixed(1)} MB)`,
-  );
-}
 
 const context = await esbuild.context({
   entryPoints: ["src/main.ts"],
@@ -56,10 +35,12 @@ const context = await esbuild.context({
   sourcemap: prod ? false : "inline",
   treeShaking: true,
   outfile: "main.js",
+  // Inline RDKit's wasm as a base64 string embedded in main.js (decoded at load
+  // via atob). Required because community-store/BRAT installs only fetch
+  // main.js/manifest.json/styles.css, not extra release assets.
+  loader: { ".wasm": "base64" },
   banner: { js: banner },
 });
-
-copyWasm();
 
 if (prod) {
   await context.rebuild();
