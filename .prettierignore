@@ -1,0 +1,5 @@
+main.js
+RDKit_minimal.wasm
+node_modules
+coverage
+package-lock.json

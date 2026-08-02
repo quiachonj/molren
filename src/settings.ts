@@ -33,24 +33,34 @@ export class MolrenSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Image width")
-      .setDesc(`Width of rendered structures, in pixels (${MIN_DIM}–${MAX_DIM}).`)
+      .setDesc(
+        `Width of rendered structures, in pixels (${MIN_DIM}–${MAX_DIM}).`,
+      )
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.width))
           .onChange(async (value) => {
-            this.plugin.settings.width = clampDim(value, DEFAULT_SETTINGS.width);
+            this.plugin.settings.width = clampDim(
+              value,
+              DEFAULT_SETTINGS.width,
+            );
             await this.plugin.saveSettings();
           }),
       );
 
     new Setting(containerEl)
       .setName("Image height")
-      .setDesc(`Height of rendered structures, in pixels (${MIN_DIM}–${MAX_DIM}).`)
+      .setDesc(
+        `Height of rendered structures, in pixels (${MIN_DIM}–${MAX_DIM}).`,
+      )
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.height))
           .onChange(async (value) => {
-            this.plugin.settings.height = clampDim(value, DEFAULT_SETTINGS.height);
+            this.plugin.settings.height = clampDim(
+              value,
+              DEFAULT_SETTINGS.height,
+            );
             await this.plugin.saveSettings();
           }),
       );

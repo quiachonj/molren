@@ -1,14 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import type { RDKitModule, JSMol } from "@rdkit/rdkit";
-import {
-  molToSvg,
-  rxnToSvg,
-  isReaction,
-  recolorForTheme,
-  cacheKey,
-  parseInput,
-  detectFormat,
-} from "../src/renderer";
+import { molToSvg, rxnToSvg, recolorForTheme } from "../src/svg";
+import { isReaction, parseInput, detectFormat } from "../src/parse";
+import { cacheKey } from "../src/renderer";
 import type { MolrenSettings } from "../src/settings";
 
 const OPTS = { width: 350, height: 300, addStereoAnnotation: true };
@@ -37,7 +31,15 @@ function fakeRDKit(
   } as unknown as JSMol;
   const get_mol = vi.fn(() => mol);
   const rdkit = { get_mol } as unknown as RDKitModule;
-  return { rdkit, mol, get_mol, del, set_new_coords, has_coords, get_svg_with_highlights };
+  return {
+    rdkit,
+    mol,
+    get_mol,
+    del,
+    set_new_coords,
+    has_coords,
+    get_svg_with_highlights,
+  };
 }
 
 describe("molToSvg", () => {
@@ -83,9 +85,17 @@ describe("molToSvg", () => {
 
   it("passes dimensions and stereo flag through the draw options", () => {
     const { rdkit, get_svg_with_highlights } = fakeRDKit();
-    molToSvg(rdkit, "CCO", { width: 400, height: 250, addStereoAnnotation: false });
+    molToSvg(rdkit, "CCO", {
+      width: 400,
+      height: 250,
+      addStereoAnnotation: false,
+    });
     const details = JSON.parse(get_svg_with_highlights.mock.calls[0][0]);
-    expect(details).toMatchObject({ width: 400, height: 250, addStereoAnnotation: false });
+    expect(details).toMatchObject({
+      width: 400,
+      height: 250,
+      addStereoAnnotation: false,
+    });
   });
 
   it("frees the mol handle even when valid", () => {
@@ -100,7 +110,10 @@ describe("molToSvg", () => {
         throw new Error("draw failed");
       },
     });
-    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({ ok: false, error: "draw failed" });
+    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({
+      ok: false,
+      error: "draw failed",
+    });
     expect(del).toHaveBeenCalledOnce();
   });
 
@@ -109,7 +122,10 @@ describe("molToSvg", () => {
       get_svg_with_highlights: () =>
         "<?xml version='1.0' encoding='iso-8859-1'?>\n<svg>real</svg>",
     });
-    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({ ok: true, svg: "<svg>real</svg>" });
+    expect(molToSvg(rdkit, "CCO", OPTS)).toEqual({
+      ok: true,
+      svg: "<svg>real</svg>",
+    });
   });
 });
 
@@ -161,7 +177,10 @@ describe("rxnToSvg", () => {
     const { rdkit } = fakeRxnKit({
       svg: "<?xml version='1.0'?>\n<svg>r</svg>",
     });
-    expect(rxnToSvg(rdkit, "CCO>>CC=O", OPTS)).toEqual({ ok: true, svg: "<svg>r</svg>" });
+    expect(rxnToSvg(rdkit, "CCO>>CC=O", OPTS)).toEqual({
+      ok: true,
+      svg: "<svg>r</svg>",
+    });
   });
 });
 
@@ -173,8 +192,12 @@ describe("recolorForTheme", () => {
   });
 
   it("rewrites O (red) and N (blue) as CSS variables", () => {
-    expect(recolorForTheme("fill:#FF0000")).toBe("fill:var(--molren-o, #d93526)");
-    expect(recolorForTheme("fill:#0000ff")).toBe("fill:var(--molren-n, #1f6feb)");
+    expect(recolorForTheme("fill:#FF0000")).toBe(
+      "fill:var(--molren-o, #d93526)",
+    );
+    expect(recolorForTheme("fill:#0000ff")).toBe(
+      "fill:var(--molren-n, #1f6feb)",
+    );
   });
 
   it("leaves the transparent #FFFFFF00 background untouched", () => {
@@ -200,7 +223,9 @@ describe("detectFormat", () => {
   });
 
   it("detects SDF via the $$$$ record separator", () => {
-    expect(detectFormat("Ethanol\n...\nM  END\n$$$$\nBenzene\n...\nM  END\n$$$$")).toBe("sdf");
+    expect(
+      detectFormat("Ethanol\n...\nM  END\n$$$$\nBenzene\n...\nM  END\n$$$$"),
+    ).toBe("sdf");
   });
 });
 
@@ -219,7 +244,9 @@ describe("parseInput — SMILES", () => {
   });
 
   it("skips blank lines and # comments", () => {
-    expect(parseInput("# heading\n\nCCO first\n# note\nCCC second\n", "smiles")).toEqual([
+    expect(
+      parseInput("# heading\n\nCCO first\n# note\nCCC second\n", "smiles"),
+    ).toEqual([
       { input: "CCO", caption: "first" },
       { input: "CCC", caption: "second" },
     ]);
@@ -284,14 +311,22 @@ describe("parseInput — auto", () => {
 });
 
 describe("cacheKey", () => {
-  const base: MolrenSettings = { width: 350, height: 300, addStereoAnnotation: true };
+  const base: MolrenSettings = {
+    width: 350,
+    height: 300,
+    addStereoAnnotation: true,
+  };
 
   it("varies by dimensions and normalizes whitespace", () => {
     expect(cacheKey(" CCO ", base)).toBe("350x300|s1|CCO");
-    expect(cacheKey("CCO", { ...base, width: 100, height: 100 })).toBe("100x100|s1|CCO");
+    expect(cacheKey("CCO", { ...base, width: 100, height: 100 })).toBe(
+      "100x100|s1|CCO",
+    );
   });
 
   it("varies by the stereo-annotation flag", () => {
-    expect(cacheKey("CCO", { ...base, addStereoAnnotation: false })).toBe("350x300|s0|CCO");
+    expect(cacheKey("CCO", { ...base, addStereoAnnotation: false })).toBe(
+      "350x300|s0|CCO",
+    );
   });
 });

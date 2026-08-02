@@ -2,6 +2,20 @@ import { App, PluginManifest, normalizePath } from "obsidian";
 import type { RDKitModule } from "@rdkit/rdkit";
 
 /**
+ * The shipped @rdkit/rdkit type definitions omit the reaction API, so we declare
+ * the small surface Molren uses. A JSReaction handle MUST be delete()'d.
+ */
+export interface JSReaction {
+  get_svg_with_highlights(details: string): string;
+  delete(): void;
+}
+
+/** RDKitModule augmented with the (untyped) reaction entry point. */
+export interface RDKitWithRxn extends RDKitModule {
+  get_rxn(input: string, details?: string): JSReaction | null;
+}
+
+/**
  * The shipped @rdkit/rdkit type definitions declare only interfaces and a
  * `Window.initRDKitModule` global — not the CommonJS default export that the JS
  * glue actually provides, and their loader options omit emscripten's
@@ -13,7 +27,7 @@ type RDKitInit = (options?: {
   wasmBinary?: ArrayBuffer;
 }) => Promise<RDKitModule>;
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- @rdkit/rdkit ships CJS with no typed default export; require() yields the loader fn
 const initRDKitModule = require("@rdkit/rdkit") as RDKitInit;
 
 /**

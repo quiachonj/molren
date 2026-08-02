@@ -6,9 +6,14 @@
   justify-content: center;
 }
 
-/* Multiple structures: responsive grid (columns set inline from settings). */
+/* Multiple structures: responsive grid. --molren-col-width is set per block
+   from the width setting; falls back to 350px. */
 .molren-grid {
   display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--molren-col-width, 350px), 1fr)
+  );
   gap: 0.5rem;
   justify-items: center;
   margin: 0.25rem 0;

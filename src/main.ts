@@ -1,11 +1,8 @@
 import { Plugin } from "obsidian";
-import {
-  DEFAULT_SETTINGS,
-  MolrenSettings,
-  MolrenSettingTab,
-} from "./settings";
+import { DEFAULT_SETTINGS, MolrenSettings, MolrenSettingTab } from "./settings";
 import { RDKitLoader } from "./rdkit";
-import { MoleculeRenderer, type InputFormat } from "./renderer";
+import { MoleculeRenderer } from "./renderer";
+import type { InputFormat } from "./parse";
 
 export default class MolrenPlugin extends Plugin {
   settings!: MolrenSettings;
@@ -41,7 +38,8 @@ export default class MolrenPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const saved = (await this.loadData()) as Partial<MolrenSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
   }
 
   async saveSettings(): Promise<void> {

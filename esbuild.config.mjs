@@ -20,10 +20,14 @@ function copyWasm() {
   const src = path.resolve("node_modules/@rdkit/rdkit/dist/RDKit_minimal.wasm");
   const dest = path.resolve("RDKit_minimal.wasm");
   if (!fs.existsSync(src)) {
-    throw new Error(`Could not find RDKit wasm at ${src}. Run "npm install" first.`);
+    throw new Error(
+      `Could not find RDKit wasm at ${src}. Run "npm install" first.`,
+    );
   }
   fs.copyFileSync(src, dest);
-  console.log(`Copied RDKit_minimal.wasm (${(fs.statSync(dest).size / 1e6).toFixed(1)} MB)`);
+  console.log(
+    `Copied RDKit_minimal.wasm (${(fs.statSync(dest).size / 1e6).toFixed(1)} MB)`,
+  );
 }
 
 const context = await esbuild.context({

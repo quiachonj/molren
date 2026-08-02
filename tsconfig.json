@@ -15,5 +15,5 @@
     "lib": ["DOM", "ES2020"],
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }

@@ -6,10 +6,17 @@ RDKit_minimal.wasm
 # deps
 node_modules/
 
+# tooling caches / coverage
+.eslintcache
+coverage/
+*.tsbuildinfo
+
 # os / editor
 .DS_Store
 Thumbs.db
 *.log
+.vscode/
+.idea/
 
-# test / coverage
-coverage/
+# scratch
+*.tmp
