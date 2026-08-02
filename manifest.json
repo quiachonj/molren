@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "minAppVersion": "1.4.0",
   "description": "Render 2D chemical structures from SMILES in your notes, powered by RDKit.js.",
-  "author": "Josh",
-  "authorUrl": "https://molren.amberlogica.com",
+  "author": "Amberlogica",
+  "authorUrl": "https://www.amberlogica.com",
   "isDesktopOnly": true,
   "fundingUrl": "https://buymeacoffee.com/joshquiachon"
 }
