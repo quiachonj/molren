@@ -1,5 +1,9 @@
 # Molren
 
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json&query=%24.molren.downloads&label=downloads&color=7c3aed)](https://obsidian.md/plugins?id=molren)
+[![Release](https://img.shields.io/github/v/release/quiachonj/molren?sort=semver&color=7c3aed)](https://github.com/quiachonj/molren/releases)
+[![License](https://img.shields.io/github/license/quiachonj/molren?color=7c3aed)](LICENSE)
+
 **Turn plain-text chemistry into pictures, right inside your notes.** Write a SMILES string (or a molfile, SDF, or reaction) in a code block and Molren draws the 2D structure inline — powered by [RDKit.js](https://www.rdkit.org/), running entirely on your machine.
 
 **Website:** [molren.amberlogica.com](https://molren.amberlogica.com) · **Support:** [☕ Buy me a coffee](https://buymeacoffee.com/joshquiachon)
