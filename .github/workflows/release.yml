@@ -5,28 +5,54 @@ on:
     tags:
       - "*"
 
-permissions:
-  contents: write
+# The build/source lives here (private). Release ASSETS are published to the
+# public mirror repo below, which is what Obsidian's community store points at.
+env:
+  PUBLIC_REPO: quiachonj/molren-public
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source (this private repo)
+        uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
 
       - run: npm ci
-      - run: npm run check
+      - run: npm run check # runs format:check, lint, test, and build (-> main.js)
 
-      - name: Create release with plugin assets
+      - name: Check out public mirror
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PUBLIC_REPO }}
+          token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          path: public
+
+      - name: Sync manifest/versions/styles into mirror's default branch
+        working-directory: public
+        run: |
+          cp ../manifest.json ../versions.json ../styles.css .
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- manifest.json versions.json styles.css; then
+            echo "No metadata changes to push."
+          else
+            git add manifest.json versions.json styles.css
+            git commit -m "chore: sync release metadata for ${{ github.ref_name }}"
+            git push
+          fi
+
+      - name: Create release with plugin assets on the public mirror
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release create "$TAG" \
+            --repo "$PUBLIC_REPO" \
             --title "$TAG" \
             --generate-notes \
             main.js manifest.json styles.css
