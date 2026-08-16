@@ -5,17 +5,26 @@ on:
     tags:
       - "*"
 
-# The build/source lives here (private). Release ASSETS are published to the
-# public mirror repo below, which is what Obsidian's community store points at.
+# Obsidian's community store reads community-plugins.json, whose entry for
+# "molren" points at this repo. It fetches manifest.json from the default
+# branch to learn the version, then downloads main.js / manifest.json /
+# styles.css from the release tagged with that version. So the release MUST
+# live here, published (not draft), or every install 404s.
+#
+# To move assets to a dedicated public artifacts repo later: set RELEASE_REPO
+# to it, give the job a PAT with contents:write on that repo as GH_TOKEN
+# (the default GITHUB_TOKEN only covers this repo), and open a PR against
+# obsidianmd/obsidian-releases changing this plugin's "repo" field to match.
 env:
-  PUBLIC_REPO: quiachonj/molren-public
+  RELEASE_REPO: ${{ github.repository }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to create the release
     steps:
-      - name: Check out source (this private repo)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -25,34 +34,25 @@ jobs:
       - run: npm ci
       - run: npm run check # runs format:check, lint, test, and build (-> main.js)
 
-      - name: Check out public mirror
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.PUBLIC_REPO }}
-          token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
-          path: public
-
-      - name: Sync manifest/versions/styles into mirror's default branch
-        working-directory: public
+      - name: Verify manifest version matches the tag
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          cp ../manifest.json ../versions.json ../styles.css .
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- manifest.json versions.json styles.css; then
-            echo "No metadata changes to push."
-          else
-            git add manifest.json versions.json styles.css
-            git commit -m "chore: sync release metadata for ${{ github.ref_name }}"
-            git push
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          if [ "$MANIFEST_VERSION" != "$TAG" ]; then
+            echo "manifest.json version ($MANIFEST_VERSION) != tag ($TAG)." >&2
+            echo "The store resolves the version from manifest.json on the default branch," >&2
+            echo "so a mismatch makes it request a release tag that does not exist." >&2
+            exit 1
           fi
 
-      - name: Create release with plugin assets on the public mirror
+      - name: Create release with plugin assets
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release create "$TAG" \
-            --repo "$PUBLIC_REPO" \
+            --repo "$RELEASE_REPO" \
             --title "$TAG" \
             --generate-notes \
             main.js manifest.json styles.css
