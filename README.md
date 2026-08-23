@@ -109,13 +109,13 @@ A `chem` block auto-detects whether its contents are SMILES, a molfile, SDF, or 
 
 ### Fences at a glance
 
-| Fence    | Input                                 | Output                          |
-| -------- | ------------------------------------- | ------------------------------- |
-| `smiles` | one or more SMILES (one per line)     | a single card or a grid         |
-| `mol`    | a single molfile / molblock           | one card, coordinates kept      |
-| `sdf`    | an SDF file (records split by `$$$$`) | a grid, one card per record     |
-| `rxn`    | reaction SMILES (with `>>`)           | full-width reaction rows        |
-| `chem`   | any of the above, auto-detected       | the right result for the input  |
+| Fence    | Input                                 | Output                         |
+| -------- | ------------------------------------- | ------------------------------ |
+| `smiles` | one or more SMILES (one per line)     | a single card or a grid        |
+| `mol`    | a single molfile / molblock           | one card, coordinates kept     |
+| `sdf`    | an SDF file (records split by `$$$$`) | a grid, one card per record    |
+| `rxn`    | reaction SMILES (with `>>`)           | full-width reaction rows       |
+| `chem`   | any of the above, auto-detected       | the right result for the input |
 
 > [!NOTE]
 > In `smiles` and `rxn` blocks, text after the first space becomes a caption, `#` lines are comments, and a trailing CXSMILES `|...|` extension is kept as part of the structure. If a line can't be read, that block shows a small inline error (for example `⚠ Molren: invalid SMILES`). One bad line won't stop the others.
@@ -159,14 +159,14 @@ fence (smiles│mol│sdf│rxn│chem)
 renderer.ts →  layout (single│grid│reaction stack), cache, mount
 ```
 
-| File              | Responsibility                                                         |
-| ----------------- | ---------------------------------------------------------------------- |
-| `src/main.ts`     | Plugin entry. Registers the `smiles`/`mol`/`sdf`/`rxn`/`chem` fences.  |
-| `src/parse.ts`    | Format detection and parsing block text into structure specs.          |
-| `src/svg.ts`      | RDKit to SVG conversion (molecules and reactions) and theming.         |
-| `src/renderer.ts` | Obsidian/DOM bridge: layout, caching, and mounting.                    |
-| `src/rdkit.ts`    | Lazy, one-time RDKit wasm init from the inlined (base64) wasm bytes.    |
-| `src/settings.ts` | Settings tab (dimensions, stereo annotations).                         |
+| File              | Responsibility                                                        |
+| ----------------- | --------------------------------------------------------------------- |
+| `src/main.ts`     | Plugin entry. Registers the `smiles`/`mol`/`sdf`/`rxn`/`chem` fences. |
+| `src/parse.ts`    | Format detection and parsing block text into structure specs.         |
+| `src/svg.ts`      | RDKit to SVG conversion (molecules and reactions) and theming.        |
+| `src/renderer.ts` | Obsidian/DOM bridge: layout, caching, and mounting.                   |
+| `src/rdkit.ts`    | Lazy, one-time RDKit wasm init from the inlined (base64) wasm bytes.  |
+| `src/settings.ts` | Settings tab (dimensions, stereo annotations).                        |
 
 ## Development
 
