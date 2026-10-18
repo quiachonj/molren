@@ -3,7 +3,12 @@ import type { RDKitModule, JSMol } from "@rdkit/rdkit";
 import { molToSvg, rxnToSvg, recolorForTheme } from "../src/svg";
 import { isReaction, parseInput, detectFormat } from "../src/parse";
 import { cacheKey } from "../src/renderer";
-import type { MolrenSettings } from "../src/settings";
+import {
+  clampDim,
+  sanitizeSettings,
+  DEFAULT_SETTINGS,
+  type MolrenSettings,
+} from "../src/settings";
 
 const OPTS = { width: 350, height: 300, addStereoAnnotation: true };
 
@@ -319,6 +324,61 @@ describe("parseInput — auto", () => {
     expect(parseInput(mb, "auto")).toEqual([
       { input: "Aspirin\n  RDKit\n\n  1  0\nM  END", caption: "Aspirin" },
     ]);
+  });
+});
+
+describe("clampDim", () => {
+  it("clamps to 100–1200 and falls back on unparsable text", () => {
+    expect(clampDim("350", 1)).toBe(350);
+    expect(clampDim("5", 1)).toBe(100);
+    expect(clampDim("99999", 1)).toBe(1200);
+    expect(clampDim("abc", 321)).toBe(321);
+  });
+});
+
+describe("sanitizeSettings", () => {
+  it("keeps valid input", () => {
+    const s = { width: 400, height: 250, addStereoAnnotation: false };
+    expect(sanitizeSettings(s)).toEqual(s);
+  });
+
+  it("fills missing fields with defaults", () => {
+    expect(sanitizeSettings({})).toEqual(DEFAULT_SETTINGS);
+    expect(sanitizeSettings({ width: 500 })).toEqual({
+      ...DEFAULT_SETTINGS,
+      width: 500,
+    });
+  });
+
+  it("falls back to defaults on wrong types and non-finite numbers", () => {
+    expect(
+      sanitizeSettings({
+        width: "400",
+        height: NaN,
+        addStereoAnnotation: "yes",
+      }),
+    ).toEqual(DEFAULT_SETTINGS);
+    expect(sanitizeSettings({ width: Infinity, height: null })).toEqual(
+      DEFAULT_SETTINGS,
+    );
+  });
+
+  it("clamps and rounds out-of-range numbers", () => {
+    expect(sanitizeSettings({ width: 5, height: 99999 })).toMatchObject({
+      width: 100,
+      height: 1200,
+    });
+    expect(sanitizeSettings({ width: 300.6 }).width).toBe(301);
+  });
+
+  it("returns defaults for non-objects", () => {
+    for (const raw of [null, undefined, "str", 42, [], [1, 2]]) {
+      expect(sanitizeSettings(raw)).toEqual(DEFAULT_SETTINGS);
+    }
+  });
+
+  it("returns a fresh object, not the defaults instance", () => {
+    expect(sanitizeSettings(null)).not.toBe(DEFAULT_SETTINGS);
   });
 });
 
