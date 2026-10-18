@@ -56,6 +56,12 @@ export function molToSvg(
   }
 }
 
+/** Max reaction bond length as a fraction of canvas height (300px → 50px). */
+const RXN_BOND_LENGTH_RATIO = 1 / 6;
+
+/** get_rxn options: parse the input as reaction SMILES, not SMARTS. */
+const RXN_PARSE_DETAILS = JSON.stringify({ useSmiles: true });
+
 /**
  * Pure reaction SMILES → SVG conversion (reactants>>products, optionally with
  * agents). Owns the JSReaction lifetime. Mirrors molToSvg's contract.
@@ -72,13 +78,26 @@ export function rxnToSvg(
 
   let rxn: JSReaction | null = null;
   try {
-    rxn = (RDKit as RDKitWithRxn).get_rxn(text);
+    // get_rxn parses reaction SMARTS by default, which turns every bond into a
+    // "single or aromatic" query bond drawn gray and dashed. We take reaction
+    // SMILES, so say so.
+    rxn = (RDKit as RDKitWithRxn).get_rxn(text, RXN_PARSE_DETAILS);
     if (!rxn) {
       return { ok: false, error: `invalid reaction: ${preview(text)}` };
     }
     return {
       ok: true,
-      svg: finishSvg(rxn.get_svg_with_highlights(drawDetails(opts))),
+      svg: finishSvg(
+        rxn.get_svg_with_highlights(
+          // RDKit scales each agent to fill the space above the arrow, so a
+          // single-atom agent like [H+] was drawn ~3x larger than the other
+          // labels and overlapped the arrow. Capping the bond length (it still
+          // shrinks to fit large reactions) keeps agents label-sized.
+          drawDetails(opts, {
+            fixedBondLength: Math.round(opts.height * RXN_BOND_LENGTH_RATIO),
+          }),
+        ),
+      ),
     };
   } catch (err) {
     return { ok: false, error: messageOf(err) };
@@ -88,7 +107,10 @@ export function rxnToSvg(
 }
 
 /** Serializes RDKit MolDrawOptions. Unknown keys are ignored by RDKit. */
-function drawDetails(opts: RenderOptions): string {
+function drawDetails(
+  opts: RenderOptions,
+  extra: Record<string, unknown> = {},
+): string {
   return JSON.stringify({
     width: opts.width,
     height: opts.height,
@@ -100,6 +122,7 @@ function drawDetails(opts: RenderOptions): string {
     // Omit rdkit: namespaced metadata so the SVG parses cleanly as image/svg+xml.
     includeMetadata: false,
     padding: 0.08,
+    ...extra,
   });
 }
 
