@@ -118,7 +118,7 @@ A `chem` block auto-detects whether its contents are SMILES, a molfile, SDF, or 
 | `chem`   | any of the above, auto-detected       | the right result for the input |
 
 > [!NOTE]
-> In `smiles` and `rxn` blocks, text after the first space becomes a caption, `#` lines are comments, and a trailing CXSMILES `|...|` extension is kept as part of the structure. If a line can't be read, that block shows a small inline error (for example `⚠ Molren: invalid SMILES`). One bad line won't stop the others.
+> In `smiles` and `rxn` blocks, text after the first space becomes a caption, `#` lines are comments, and a trailing CXSMILES `|...|` extension is kept as part of the structure. If a line can't be read, that block shows a small inline error (for example `⚠ Molren: invalid structure: C1CC`). One bad line won't stop the others.
 
 New to SMILES? Copy the "Canonical SMILES" from a compound's PubChem or Wikipedia page, or draw a structure in a free editor like Ketcher and export SMILES.
 
@@ -159,14 +159,14 @@ fence (smiles│mol│sdf│rxn│chem)
 renderer.ts →  layout (single│grid│reaction stack), cache, mount
 ```
 
-| File              | Responsibility                                                        |
-| ----------------- | --------------------------------------------------------------------- |
-| `src/main.ts`     | Plugin entry. Registers the `smiles`/`mol`/`sdf`/`rxn`/`chem` fences. |
-| `src/parse.ts`    | Format detection and parsing block text into structure specs.         |
-| `src/svg.ts`      | RDKit to SVG conversion (molecules and reactions) and theming.        |
-| `src/renderer.ts` | Obsidian/DOM bridge: layout, caching, and mounting.                   |
-| `src/rdkit.ts`    | Lazy, one-time RDKit wasm init from the inlined (base64) wasm bytes.  |
-| `src/settings.ts` | Settings tab (dimensions, stereo annotations).                        |
+| File              | Responsibility                                                         |
+| ----------------- | ---------------------------------------------------------------------- |
+| `src/main.ts`     | Plugin entry. Registers the `smiles`/`mol`/`sdf`/`rxn`/`chem` fences.  |
+| `src/parse.ts`    | Format detection and parsing block text into structure specs.          |
+| `src/svg.ts`      | RDKit to SVG conversion (molecules and reactions) and theming.         |
+| `src/renderer.ts` | Obsidian/DOM bridge: layout, caching, and mounting.                    |
+| `src/rdkit.ts`    | Lazy, one-time RDKit wasm init from the inlined (gzipped base64) wasm. |
+| `src/settings.ts` | Settings tab (dimensions, stereo annotations).                         |
 
 ## Development
 
@@ -188,8 +188,8 @@ To develop against a real vault, symlink `molren/` into a test vault's
 > [!IMPORTANT]
 > Molren is desktop-only (`isDesktopOnly: true`) and targets `minAppVersion` 1.4.0, so it uses the classic settings-tab API rather than the declarative one from 1.13.
 
-1. **wasm delivery.** The RDKit `.wasm` (~7 MB) is inlined into `main.js` as base64 (esbuild `base64` loader), decoded with `atob` at load, and passed to `initRDKitModule({ wasmBinary })`. This is required because community-store and BRAT installs only download `main.js`/`manifest.json`/`styles.css`. Extra release assets aren't fetched, so the wasm can't ship as a separate file.
-2. **Coordinates.** SMILES carry none, so Molren generates a CoordGen 2D layout. Molfiles and SDF bring their own, which are preserved. The choice is made per structure via RDKit's `has_coords()`, not by fence.
+1. **wasm delivery.** The RDKit `.wasm` (~6.9 MB raw) is gzipped at level 9 by the `gzip-rdkit-wasm` esbuild plugin and inlined into `main.js` as base64 text, which keeps `main.js` at about 3 MB. At load it is decoded with `atob`, gunzipped with `DecompressionStream`, and passed to `initRDKitModule({ wasmBinary })`. Inlining is required because community-store and BRAT installs only download `main.js`/`manifest.json`/`styles.css`. Extra release assets aren't fetched, so the wasm can't ship as a separate file.
+2. **Coordinates.** SMILES carry none, so Molren generates a CoordGen 2D layout. Molfiles and SDF with 2D coordinates keep them; 3D coordinates get a fresh 2D layout, since drawing them as-is just projects x/y and can overlap atoms. The choice is made per structure via RDKit's `has_coords()` (0 none, 2 2D, 3 3D), not by fence.
 3. **Theming.** RDKit bakes fixed colors into the SVG. Molren rewrites any dark near-grayscale "ink" (bonds, carbons, dummy atoms drawn as `#191919`, annotations) plus O/N as CSS variables, so one cached SVG adapts to light and dark live.
 4. **SVG insertion.** Parsed via `DOMParser` + `importNode` (not `innerHTML`) per Obsidian's guidelines.
 5. **RDKit types.** The shipped `@rdkit/rdkit` types omit the reaction API and the CJS default export, so both are declared locally in `src/rdkit.ts`.

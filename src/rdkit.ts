@@ -56,9 +56,9 @@ const initRDKitModule = require("@rdkit/rdkit") as RDKitInit;
 /**
  * Lazily initializes RDKit's wasm module exactly once.
  *
- * The ~7 MB `RDKit_minimal.wasm` is inlined into `main.js` and handed to
- * emscripten via `wasmBinary`. This is required for community-store and BRAT
- * installs, which only download `main.js`/`manifest.json`/`styles.css` — not
+ * The ~6.9 MB `RDKit_minimal.wasm` is inlined into `main.js` (gzipped, about
+ * 3 MB in the bundle) and handed to emscripten via `wasmBinary`. This is
+ * required for community-store and BRAT installs, which only download `main.js`/`manifest.json`/`styles.css` — not
  * extra release assets — so the wasm cannot be shipped as a separate file.
  */
 export class RDKitLoader {
