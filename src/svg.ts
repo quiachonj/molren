@@ -37,9 +37,12 @@ export function molToSvg(
     if (!mol || !mol.is_valid()) {
       return { ok: false, error: `invalid structure: ${preview(text)}` };
     }
-    // Generate a CoordGen 2D layout only when the input carries none (SMILES).
-    // Molblocks/SDF bring authored coordinates, which we must preserve.
-    if (!mol.has_coords()) {
+    // Keep authored coordinates only when they are genuinely 2D. At runtime
+    // has_coords() returns a number (0 = none, 2 = 2D, 3 = 3D) although the
+    // shipped typings say boolean. SMILES (0) and 3D molfiles (3) get a fresh
+    // CoordGen layout; drawing 3D input as-is just projects x/y and can overlap
+    // atoms or fold bonds onto each other.
+    if (Number(mol.has_coords()) !== 2) {
       mol.set_new_coords(true);
     }
     return {
