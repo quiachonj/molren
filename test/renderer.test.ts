@@ -9,7 +9,7 @@ const OPTS = { width: 350, height: 300, addStereoAnnotation: true };
 
 /**
  * Build a fake RDKit module whose get_mol returns a controllable JSMol.
- * `hasCoords` mirrors RDKit's has_coords() (0 = none, 2 = 2D).
+ * `hasCoords` mirrors RDKit's has_coords() (0 = none, 2 = 2D, 3 = 3D).
  */
 function fakeRDKit(
   overrides: Partial<JSMol> & { valid?: boolean; hasCoords?: number } = {},
@@ -81,6 +81,12 @@ describe("molToSvg", () => {
     const { rdkit, set_new_coords } = fakeRDKit({ hasCoords: 2 });
     molToSvg(rdkit, "…molblock…", OPTS);
     expect(set_new_coords).not.toHaveBeenCalled();
+  });
+
+  it("generates fresh coords for a 3D molblock instead of projecting it", () => {
+    const { rdkit, set_new_coords } = fakeRDKit({ hasCoords: 3 });
+    molToSvg(rdkit, "…3D molblock…", OPTS);
+    expect(set_new_coords).toHaveBeenCalledWith(true);
   });
 
   it("passes dimensions and stereo flag through the draw options", () => {
