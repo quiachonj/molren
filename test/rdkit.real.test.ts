@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { RDKitModule } from "@rdkit/rdkit";
-import { molToSvg } from "../src/svg";
+import { molToSvg, rxnToSvg } from "../src/svg";
 
 /**
  * Smoke tests against the REAL RDKit wasm (no fakes). They guard behavior the
@@ -58,6 +58,56 @@ function bondPaths(svg: string): string[] {
     (m) => m[1],
   );
 }
+
+const RXN_OPTS = { width: 700, height: 300, addStereoAnnotation: true };
+
+/** Tallest atom-label glyph path (agents and atoms are drawn as paths). */
+function maxLabelHeight(svg: string): number {
+  let max = 0;
+  for (const m of svg.matchAll(/<path class='atom-\d+' d='([^']*)'/g)) {
+    const ys = [
+      ...m[1].matchAll(/(-?\d+(?:\.\d+)?)[ ,](-?\d+(?:\.\d+)?)/g),
+    ].map((n) => Number(n[2]));
+    max = Math.max(max, Math.max(...ys) - Math.min(...ys));
+  }
+  return max;
+}
+
+describe("real RDKit: reactions", () => {
+  it("draws reaction SMILES as solid black bonds, not SMARTS query bonds", () => {
+    const res = rxnToSvg(rdkit, "CC(=O)O>[H+]>CC(=O)OCC", RXN_OPTS);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.svg).not.toContain("stroke-dasharray");
+    expect(res.svg.toUpperCase()).not.toContain("#7F7F7F");
+  });
+
+  it("renders a balanced reaction and agent-less / charged / aromatic forms", () => {
+    for (const rxn of [
+      "CC(=O)O.OCC>[H+]>CC(=O)OCC.O",
+      "CCO>>CC=O",
+      "c1ccccc1>>C1CCCCC1",
+      "C[N+](C)(C)C.[Cl-]>>CN(C)C",
+    ]) {
+      const res = rxnToSvg(rdkit, rxn, RXN_OPTS);
+      expect(res.ok, rxn).toBe(true);
+      if (res.ok) expect(res.svg).not.toContain("stroke-dasharray");
+    }
+  });
+
+  it("returns ok:false for an invalid reaction", () => {
+    const res = rxnToSvg(rdkit, "this is not a reaction>>", RXN_OPTS);
+    expect(res.ok).toBe(false);
+  });
+
+  it("keeps a single-atom agent label-sized (not scaled up over the arrow)", () => {
+    const res = rxnToSvg(rdkit, "CC(=O)O>[H+]>CC(=O)OCC", RXN_OPTS);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Unconstrained, the [H+] glyph is ~58px tall vs ~21px for other labels.
+    expect(maxLabelHeight(res.svg)).toBeLessThan(30);
+  });
+});
 
 describe("real RDKit", () => {
   it("has_coords() returns 0 / 2 / 3 for SMILES / 2D / 3D", () => {

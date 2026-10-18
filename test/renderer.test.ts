@@ -165,6 +165,28 @@ describe("rxnToSvg", () => {
     return { rdkit, del, get_rxn };
   }
 
+  it("parses reaction SMILES (useSmiles), not the default SMARTS", () => {
+    const { rdkit, get_rxn } = fakeRxnKit();
+    rxnToSvg(rdkit, "CCO>>CC=O", OPTS);
+    expect(get_rxn).toHaveBeenCalledOnce();
+    const [text, details] = get_rxn.mock.calls[0] as unknown as [
+      string,
+      string,
+    ];
+    expect(text).toBe("CCO>>CC=O");
+    expect(JSON.parse(details)).toEqual({ useSmiles: true });
+  });
+
+  it("caps the reaction bond length relative to the canvas height", () => {
+    const get_svg_with_highlights = vi.fn((_d: string) => "<svg></svg>");
+    const rxn = { get_svg_with_highlights, delete: vi.fn() };
+    const rdkit = { get_rxn: () => rxn } as unknown as RDKitModule;
+    rxnToSvg(rdkit, "C>>N", { ...OPTS, height: 300 });
+    expect(JSON.parse(get_svg_with_highlights.mock.calls[0][0])).toMatchObject({
+      fixedBondLength: 50,
+    });
+  });
+
   it("renders SVG for a valid reaction", () => {
     const { rdkit } = fakeRxnKit();
     expect(rxnToSvg(rdkit, "CCO>>CC=O", OPTS)).toEqual({
